@@ -340,6 +340,13 @@ BUILTIN(visible, "", "", "B",
     return !SDLIsMinimized();
 }
 
+BUILTIN(window_focused, "", "", "B",
+    "checks if the window has the input focus and isn't hidden behind other windows (a window in"
+    " the background may draw less often). Remains true in headless mode.")
+(VM &) {
+    return SDLIsFocused();
+}
+
 BUILTIN(cursor, "on", "B", "B",
     "default the cursor is visible, turn off for implementing FPS like control schemes. return"
     " whether it was on before this call.")
