@@ -191,8 +191,10 @@ Formats Lobster source in the layout of the [style guide](style_guide.html), wit
 like `gofmt`. Only the whitespace between tokens changes. It uses the compiler's own parser, which
 needs to know what names mean, so it takes the main file of a program, and formats the files of that
 program in the same directory or under it. Source with errors the parser reports is refused, and so
-is code after a comment at the start of a line outside brackets. A file that's in several programs
-has to come out the same in each.
+is code after a comment at the start of a line outside brackets, and a NUL character. A file that's
+in several programs given has to come out the same in each, and nothing is written otherwise, so
+give all the programs that share a file that relies on what imports it. The compiler's own modules
+are left alone.
 
 A library that imports what it uses is a program as far as this goes. A file that relies on what
 the file importing it imported first is formatted through that program: with `-program` just the

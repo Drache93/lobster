@@ -152,6 +152,14 @@ static const pair<string_view, string_view> goldens[] = {
     { "def e():\n  // h\n\n  g(1)\n", "def e():\n    // h\n\n    g(1)\n" },
     { "let z = q\n\n  // c\n  .f(1)\n", "let z = q\n\n    // c\n    .f(1)\n" },
     { "let z = q\n// c\n// e\n  .f(1)\n", "let z = q\n    // c\n    // e\n    .f(1)\n" },
+    // Whitespace before a string with interpolations, for a call without parentheses.
+    { "print /* c */ \"{a}\"\n", "print /* c */ \"{a}\"\n" },
+    { "print(g\n    \"{a}\")\n", "print(g\n      \"{a}\")\n" },
+    // Only an operator stays tight after such a name.
+    { "print((red) + 1)\nlet v=red\nif red: 1 else: 2\n", "print((red) + 1)\nlet v = red\nif red: 1 else: 2\n" },
+    // Type arguments glued to a comment, and a variable named like a namespace.
+    { "def p<T>(v): return v\np/* c */<int>(1)\n", "def p<T>(v): return v\np/* c */<int>(1)\n" },
+    { "let tcp = q\nprint(tcp .x)\n", "let tcp = q\nprint(tcp .x)\n" },
     // The parameters of a function value.
     { "t(1)(x:int): x\nfor([ 1 ])(e:int, j:int): e\n", "t(1) (x:int): x\nfor([ 1 ]) (e:int, j:int): e\n" },
 };
@@ -454,6 +462,20 @@ int main(int argc, char **argv) {
         }
         Overlay().erase("golden.lobster");
         fs::current_path(start);
+    }
+    // Not the compiler's own modules when the program's folder holds them.
+    {
+        auto root = fs::absolute(MainDir()).lexically_normal().generic_string();
+        auto inroot = root + "lobsterfmt_test_main.lobster";
+        Overlay()[inroot] = "import std\nprint(1)\n";
+        data_dirs.clear();
+        InitPlatform(GetMainDirFromExePath(exe), inroot, false, LoadSource);
+        vector<FormattedFile> formatted;
+        auto error = FormatProgram("lobsterfmt_test_main.lobster", root, formatted);
+        if (!error.empty() || formatted.size() != 1) {
+            Failed(cat("a program next to the modules: ", error, " ", formatted.size()), "");
+        }
+        Overlay().erase(inroot);
     }
     // Only the file asked for, read as part of the program.
     {

@@ -22,8 +22,8 @@
 // is read again and refused unless it reads the same, see Check.
 //
 // Refused, other than what doesn't parse: code after a comment at the start of a line outside
-// brackets, since the lexer measures that line's indentation from the end of the comment, and
-// what's nested too deeply for this to recurse on, see Reader::Nested.
+// brackets, since the lexer measures that line's indentation from the end of the comment, and a
+// NUL character, where the lexer stops.
 
 #include "syntax.h"
 
@@ -35,7 +35,7 @@ namespace lobsterfmt {
 inline bool CanStartArgument(const Token &t) {
     switch (t.t) {
         case T_LEFTPAREN: case T_LEFTBRACKET: case T_LEFTCURLY: case T_MINUS: case T_NEG:
-        case T_INCR: case T_DECR:
+        case T_INCR: case T_DECR: case T_LT:
             return true;
         default:
             return t.t != T_NONE && (IsWord(t) || IsNumber(t) || IsString(t));
@@ -118,7 +118,7 @@ inline bool Spaced(const Token &a, const Token &b) {
 // Whether the parser reads b differently with or without whitespace between a and it: `f(x)` and
 // `f (x)`.
 inline bool WsDecides(const Token &a, const Token &b) {
-    if (b.role == TR_TIGHT) return true;
+    if (b.role == TR_TIGHT || b.keepspace) return true;
     return IsName(a) && a.role != TR_DEFNAME && b.t == T_LEFTPAREN;
 }
 
@@ -197,7 +197,7 @@ struct Layout {
     }
 
     void MakeRows() {
-        auto src = syntax.src;
+        string_view src = syntax.src;
         int end = 0;
         for (auto &t : syntax.tokens) {
             int newlines = 0;
@@ -518,7 +518,7 @@ inline int64_t LoadSource(string_view_nt path, string *dest, int64_t start, int6
     return (int64_t)dest->size();
 }
 
-// What it needs of the builtins it doesn't link, see engine_names.h.
+// What it needs of the builtins it doesn't link, see engine_names.cpp.
 extern void RegisterEngineNames(NativeRegistry &nfr);
 
 inline NativeRegistry &Natives() {
@@ -556,12 +556,19 @@ inline string FormatProgram(string_view fn, string_view maindir, vector<Formatte
     Recorder before;
     auto errors = ReadProgram(fn, before);
     if (!errors.empty()) return errors;
+    auto modules = std::filesystem::absolute(MainDir() + "modules/")
+                       .lexically_normal()
+                       .generic_string();
     map<string, string> changed;
     for (auto &f : before.files) {
         if (!f) continue;
-        // Never the compiler's own modules, which it finds elsewhere.
         auto path = std::filesystem::absolute(f->path).lexically_normal().generic_string();
-        if (!(only ? only->count(f->path) != 0 : string_view(path).starts_with(maindir))) continue;
+        // Never the compiler's own modules, wherever they are, unless that's the program.
+        auto stock = string_view(path).starts_with(modules) &&
+                     !string_view(maindir).starts_with(modules);
+        auto wanted = only ? only->count(f->path) != 0
+                           : string_view(path).starts_with(maindir) && !stock;
+        if (!wanted) continue;
         if (auto nul = f->src.find('\0'); nul != string::npos) {
             f->Refuse("a NUL character", (int)nul);
         }
