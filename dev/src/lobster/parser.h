@@ -30,6 +30,8 @@ struct Parser {
     };
     vector<BlockScope> block_stack;
     int serializable_id_last = -1;
+    // Where the header of the next block starts, see TokenObserver.
+    int block_header = -1;
 
     Parser(NativeRegistry &natreg, Lex &lex, SymbolTable &st)
         : natreg(natreg), lex(lex), st(st) {}
@@ -154,6 +156,7 @@ struct Parser {
     // The same for a block that has to be there. Without one, whatever is there instead is
     // left for the caller's line.
     template<typename F> void ParseIndentedLines(F f) {
+        lex.Block(block_header);
         if (!IsNext(T_INDENT)) {
             Expected(T_INDENT);
             return;
@@ -298,6 +301,7 @@ struct Parser {
     }
 
     void ParseTopExp(Block *list, bool isprivate = false) {
+        DS<int> header(block_header, lex.Here());
         switch(lex.token) {
             case T_NAMESPACE:
                 if (st.scopelevels.size() != 1 || isprivate)
@@ -507,6 +511,7 @@ struct Parser {
                 auto id = st.LookupDefStatic(idname);
                 id->isprivate = true;
                 UnTypeRef type = (UnType *)nullptr;
+                if (lex.token == T_COLON) lex.Mark(TR_TYPECOLON);
                 if (IsNext(T_COLON)) {
                     type = ParseType(false);
                 }
@@ -643,6 +648,7 @@ struct Parser {
             bool withtype = lex.token == T_TYPEIN;
             UnTypeRef type = (UnType *)nullptr;
             if (lex.token == T_COLON || withtype) {
+                if (!withtype) lex.Mark(TR_TYPECOLON);
                 lex.Next();
                 type = ParseType(withtype);
             }
@@ -715,6 +721,7 @@ struct Parser {
     // it would have anyway. Not part of the type: the field holds a plain int/float as far
     // as everything but its storage is concerned, so this is only accepted here.
     int ParseFieldBits(UnTypeRef type) {
+        lex.Mark(TR_GENERIC);
         Expect(T_LT);
         int64_t bits = 0;
         if (lex.token == T_INT) {
@@ -725,6 +732,7 @@ struct Parser {
         }
         // This may be the end of the line, so make sure Lex doesn't see it as a GT op.
         lex.OverrideCont(false);
+        lex.Mark(TR_GENERIC);
         Expect(T_GT);
         if (type->t == V_INT) {
             if (bits <= 0 || bits > 64 || bits % 8) {
@@ -748,6 +756,7 @@ struct Parser {
         auto &sfield = st.FieldDecl(lastid, gudt);
         UnTypeRef type = (UnType *)nullptr;
         int bits = 0;
+        if (lex.token == T_COLON) lex.Mark(TR_TYPECOLON);
         if (IsNext(T_COLON)) {
             type = ParseType(false);
             if (lex.token == T_LT) bits = ParseFieldBits(type);
@@ -846,6 +855,7 @@ struct Parser {
                 udt = SingleSpecialization(gudt, sname, was_predeclaration);
             }
             if (lex.token == T_IDENT) {
+                lex.MarkPrevious(TR_INHERIT);
                 // Unpacked by hand, see the lambda capture comment above.
                 auto sup = ParseSup(is_struct);
                 auto gsup = sup.first;
@@ -869,10 +879,12 @@ struct Parser {
                     }
                 }
             }
+            if (lex.token == T_INDENT) lex.Block(block_header);
             if (IsNext(T_INDENT)) {
                 bool fieldsdone = false;
                 SymbolTable::BoundTypeVars btv(st, gudt->generics);
                 ParseLines([&]() {
+                    DS<int> header(block_header, lex.Here());
                     if (IsNext(T_ATTRIBUTE)) {
                         auto [key, value] = ParseAttribute(gudt->attributes);
                         if (key == "serializable") {
@@ -1026,6 +1038,7 @@ struct Parser {
             auto op = lex.token;
             if ((op < T_PLUS || op > T_ASREQ) && op != T_LEFTBRACKET)
                 Error(cat("illegal token for operator overloading: ", TName(op)));
+            lex.Mark(TR_OPNAME);
             // Only functions declared at the file's top scope (which includes the methods
             // of a class declared there) are found by operator syntax, see
             // SymbolTable::FunctionDecl, so anywhere else this would be an ordinary
@@ -1035,6 +1048,7 @@ struct Parser {
             auto idname = cat(TName(T_OPERATOR), TName(op));
             lex.Next();
             if (op == T_LEFTBRACKET) {
+                lex.Mark(TR_OPNAME);
                 Expect(T_RIGHTBRACKET);
                 idname += ']';
             }
@@ -1042,6 +1056,7 @@ struct Parser {
         } else {
             // TODO: also exclude functions from namespacing whose first arg is a type namespaced to
             // current namespace (which is same as !self).
+            lex.Mark(TR_DEFNAME);
             auto idname = string(st.MaybeMakeNameSpace(ExpectId(), !self));
             return ParseFunction(&idname, is_constructor, isprivate, true, true, self);
         }
@@ -1091,6 +1106,7 @@ struct Parser {
     }
 
     void ParseBody(Block *block, int for_nargs, bool allow_multi_assign) {
+        lex.Block(block_header);
         block_stack.push_back({ block, for_nargs, 0 });
         if (IsNext(T_INDENT)) {
             ParseStatements(block, T_DEDENT);
@@ -1145,6 +1161,7 @@ struct Parser {
                 bool withtype = lex.token == T_TYPEIN;
                 auto id = st.LookupDef(lastid, false, withtype);
                 if (parens && (lex.token == T_COLON || withtype)) {
+                    if (!withtype) lex.Mark(TR_TYPECOLON);
                     lex.Next();
                     auto atype = ParseType(withtype, nullptr);
                     if (withtype) st.AddWithStruct(GetGUDTAny(atype), id, sf);
@@ -1206,6 +1223,7 @@ struct Parser {
         f.overloads.emplace_back(ov);
         ov->method_of = self;
         sf->SetParent(f, *ov);
+        if (name && lex.token == T_LEFTBRACKET) lex.Mark(TR_INDEX);
         if (name && IsNext(T_LEFTBRACKET)) {
             for (;;) {
                 auto id = ExpectId();
@@ -1221,12 +1239,14 @@ struct Parser {
                     }
                 }
                 UnTypeRef type = (UnType *)nullptr;
+                if (lex.token == T_COLON) lex.Mark(TR_TYPECOLON);
                 if (IsNext(T_COLON)) {
                     type = ParseType(false);
                 }
                 ov->freevardecls.push_back(new ExplicitFreeVar { id, type });
                 if (!IsNext(T_COMMA)) break;
             }
+            lex.Mark(TR_INDEX);
             ExpectClosing(T_RIGHTBRACKET);
         }
         if (IsNext(T_RETURNTYPE)) {  // Return type decl.
@@ -1306,6 +1326,7 @@ struct Parser {
     // is an operator to the lexer, which would take a line break after it as continuing the
     // line.
     template<typename F> void ParseSpecializerList(F f) {
+        lex.MarkPrevious(TR_GENERIC);
         lex.allow_shift_right = false;
         for (;;) {
             f();
@@ -1313,6 +1334,7 @@ struct Parser {
         }
         lex.allow_shift_right = true;
         lex.OverrideCont(false);
+        lex.Mark(TR_GENERIC);
         Expect(T_GT);
     }
 
@@ -1363,6 +1385,7 @@ struct Parser {
                 break;
             case T_RESOURCE: {
                 lex.Next();
+                lex.Mark(TR_GENERIC);
                 Expect(T_LT);
                 auto id = ExpectId();
                 auto rt = LookupResourceType(id);
@@ -1375,6 +1398,7 @@ struct Parser {
                 // This may be the end of the line, so make sure Lex doesn't see it
                 // as a GT op.
                 lex.OverrideCont(false);
+                lex.Mark(TR_GENERIC);
                 Expect(T_GT);
                 break;
             }
@@ -1476,6 +1500,7 @@ struct Parser {
     }
 
     void ParseExpStat(Block *list, bool allow_multi_assign = false) {
+        DS<int> header(block_header, lex.Here());
         switch (lex.token) {
             case T_FOR: {
                 lex.Next();
@@ -1682,6 +1707,7 @@ struct Parser {
 
     Node *UnaryArg() {
         auto t = lex.token;
+        lex.Mark(TR_UNARY);
         lex.Next();
         auto e = ParseUnary();
         return t == T_INCR || t == T_DECR ? Modify(e) : e;
@@ -1784,6 +1810,7 @@ struct Parser {
                         break;
                     }
                     case T_LEFTPAREN:
+                        lex.Mark(TR_PARAMS);
                         e = ParseFunction(nullptr, false, false, true, true, nullptr);
                         break;
                     default: return;
@@ -1791,6 +1818,7 @@ struct Parser {
                 list.push_back(e);
                 auto islf = IsNext(T_LINEFEED);
                 if (!islf && lex.token != T_LAMBDA) { return; }
+                block_header = lex.Here();
                 if (!IsNext(T_LAMBDA)) {
                     // The line break was not followed by another function value, so it ends
                     // the call after all.
@@ -1825,6 +1853,7 @@ struct Parser {
         for (;;) switch (lex.token) {
             case T_DOT: {
                 lex.Next();
+                DS<int> header(block_header, lex.Here());
                 auto idname = ExpectId();
                 auto fld = st.FieldUse(idname);
                 if (fld && lex.token != T_LEFTPAREN) {
@@ -1847,17 +1876,21 @@ struct Parser {
                 return n;
             }
             case T_LEFTBRACKET: {
+                lex.Mark(TR_INDEX);
                 lex.Next();
                 n = new Indexing(lex, n, ParseExp());
+                lex.Mark(TR_INDEX);
                 ExpectClosing(T_RIGHTBRACKET);
                 break;
             }
             case T_INCR:
                 n = new PostIncr(lex, Modify(n));
+                lex.Mark(TR_POSTFIX);
                 lex.Next();
                 return n;
             case T_DECR:
                 n = new PostDecr(lex, Modify(n));
+                lex.Mark(TR_POSTFIX);
                 lex.Next();
                 return n;
             default:
@@ -1866,6 +1899,7 @@ struct Parser {
     }
 
     Node *ParseFactor() {
+        DS<int> header(block_header, lex.Here());
         switch (lex.token) {
             case T_INT: {
                 auto i = lex.ival;
@@ -1930,6 +1964,7 @@ struct Parser {
                 return n;
             }
             case T_LEFTBRACKET: {
+                lex.Mark(TR_LIST);
                 lex.Next();
                 auto constructor = new VectorConstructor(lex);
                 ParseVector([this, &constructor] () {
@@ -2013,6 +2048,7 @@ struct Parser {
                 bool have_out_of_range = false;
                 auto cases = new List(lex);
                 ParseIndentedLines([&]() {
+                    block_header = lex.Here();
                     List *pattern = new List(lex);
                     Line cline = lex;
                     bool out_of_range = false;
@@ -2090,6 +2126,7 @@ struct Parser {
         auto thenp = ParseBlock(-1, false, allow_multi_assign);
         st.BlockScopeCleanup();
         auto islf = IsNext(T_LINEFEED);
+        block_header = lex.Here();
         if (IsNext(T_ELIF)) {
             // FIXME: we can't support a definition inside condition here because it would put it
             // before the entire nested if!
@@ -2175,6 +2212,7 @@ struct Parser {
             // A :: normally continues the line (a type follows), but here the body may be
             // an indented block.
             lex.OverrideCont(false);
+            lex.Mark(TR_BLOCK);
             Expect(T_TYPEIN);
         } else {
             Expect(T_COLON);
@@ -2213,6 +2251,7 @@ struct Parser {
         st.BlockScopeStart();
         auto block = new Block(lex);
         if (parse_args && lex.token != T_COLON) {
+            if (lex.token == T_LEFTPAREN) lex.Mark(TR_PARAMS);
             auto parens = IsNext(T_LEFTPAREN);
             for (;;) {
                 ExpectId();
@@ -2221,6 +2260,7 @@ struct Parser {
                 id->loop_var = true;
                 UnTypeRef type = (UnType *)nullptr;
                 if (parens && (lex.token == T_COLON || withtype)) {
+                    if (!withtype) lex.Mark(TR_TYPECOLON);
                     lex.Next();
                     type = ParseType(withtype, nullptr);
                     if (withtype) {
@@ -2241,12 +2281,14 @@ struct Parser {
     }
 
     void ParseVector(const function<void()> &f, TType closing) {
+        if (closing == T_RIGHTBRACKET && lex.token == closing) lex.Mark(TR_LIST);
         if (IsNext(closing)) return;
         assert(lex.token != T_INDENT);  // Not generated inside brackets/braces.
         for (;;) {
             f();
             if (lex.token == closing || !ListSep(T_COMMA, closing) || lex.token == closing) break;
         }
+        if (closing == T_RIGHTBRACKET) lex.Mark(TR_LIST);
         ExpectClosing(closing);
     }
 
@@ -2409,6 +2451,11 @@ struct Parser {
         // Check for enum value.
         auto ev = st.EnumValLookup(idname, false);
         if (ev) {
+            if (!id && !field && (nf || f) && !lex.whitespacebefore &&
+                ((lex.token >= T_PLUS && lex.token <= T_OR) ||
+                 Either(T_RIGHTBRACKET, T_RIGHTCURLY))) {
+                lex.Mark(TR_TIGHT);
+            }
             auto ic = new IntConstant(lex, ev->val);
             ic->from = ev;
             return ic;

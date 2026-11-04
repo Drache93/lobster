@@ -19,6 +19,39 @@
 
 namespace lobster {
 
+// What a token is where its type alone doesn't say, which the compiler has no use for: the parser
+// tells a tool that asks for it, see TokenObserver.
+enum TokenRole {
+    TR_NONE,
+    TR_UNARY,  // - ~ ++ --
+    TR_POSTFIX,
+    TR_GENERIC,  // < > around type arguments
+    TR_INDEX,    // [ ]
+    TR_LIST,
+    TR_TYPECOLON,  // a:int
+    TR_INHERIT,    // class a : b
+    TR_BLOCK,      // the :: of `case T::`
+    TR_DEFNAME,    // def name(
+    TR_OPNAME,     // def operator+(
+    TR_PARAMS,     // the ( of a function value: `f(x) (y:int):`
+    TR_TIGHT,      // after a function and enum value a: `a-1`, `[a]`, which with a space would call it
+};
+
+struct Lex;
+
+// For a tool that needs to know more than the compiler keeps, like a formatter. All of these are
+// about the token that Lex::Next last read.
+struct TokenObserver {
+    virtual ~TokenObserver() {}
+    virtual void Read(Lex &lex) = 0;
+    virtual void Mark(Lex &lex, TokenRole role, bool previous) = 0;
+    virtual void NoContinuation(Lex &lex) = 0;
+    // An id for the current token, to say a block's header starts there, see Block.
+    virtual int Here(Lex &lex) = 0;
+    // After the : of a block, whose header starts at `header`.
+    virtual void Block(Lex &lex, int header) = 0;
+};
+
 struct LoadedFile : Line {
     const char *p = nullptr;
     const char *linestart = nullptr;
@@ -86,10 +119,11 @@ struct Lex : LoadedFile {
     // consumed anything since the last error.
     size_t token_count = 0;
     size_t last_error_token = (size_t)-1;
+    TokenObserver *observer = nullptr;
 
     Lex(string_view fn, vector<pair<string, string>> &fns, const vector<string_view> &extra_namespaces,
-        string_view _ss, int max_errors)
-        : LoadedFile(fn, fns, _ss), filenames(fns), max_errors(max_errors) {
+        string_view _ss, int max_errors, TokenObserver *observer = nullptr)
+        : LoadedFile(fn, fns, _ss), filenames(fns), max_errors(max_errors), observer(observer) {
         for (auto s : extra_namespaces) namespaces.insert(s);
         allsources.push_back(source);
         if (!fn.empty()) allfiles.insert(string(fn));
@@ -174,6 +208,16 @@ struct Lex : LoadedFile {
     }
 
     void Next() {
+        ReadNext();
+        if (observer) observer->Read(*this);
+    }
+
+    void Mark(TokenRole role) { if (observer) observer->Mark(*this, role, false); }
+    void MarkPrevious(TokenRole role) { if (observer) observer->Mark(*this, role, true); }
+    int Here() { return observer ? observer->Here(*this) : -1; }
+    void Block(int header) { if (observer) observer->Block(*this, header); }
+
+    void ReadNext() {
         token_count++;
         if (gentokens.size()) {
             token = gentokens.back().t;
@@ -233,11 +277,14 @@ struct Lex : LoadedFile {
             } else {
                 Push(T_LINEFEED);
             }
-            Next();
+            ReadNext();
         }
     }
 
-    void OverrideCont(bool c) { cont = c; }
+    void OverrideCont(bool c) {
+        cont = c;
+        if (observer && !c) observer->NoContinuation(*this);
+    }
 
     void PopBracket(TType c) {
         if (bracketstack.empty()) {
