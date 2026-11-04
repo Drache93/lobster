@@ -1007,6 +1007,12 @@ void SDLTitle(string_view_nt title) {
 int SDLWheelDelta() { return mousewheeldelta; }
 bool SDLIsMinimized() { return minimized; }
 
+bool SDLIsFocused() {
+    if (!_sdl_window) return true;
+    auto flags = SDL_GetWindowFlags(_sdl_window);
+    return (flags & SDL_WINDOW_INPUT_FOCUS) && !(flags & SDL_WINDOW_OCCLUDED);
+}
+
 bool SDLCursor(bool on) {
     if (on == cursor) return cursor;
     cursor = !cursor;
