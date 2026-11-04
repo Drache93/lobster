@@ -60,8 +60,9 @@ static bool WriteFormatted(const string &file, string_view result) {
     return !ec;
 }
 
-// Formats the program as the flags say, returning whether that was possible: only `given` of it if
-// there are any. A file that's in several programs has to come out the same in each, in `seen`.
+// Formats the program, returning whether that was possible: only `given` of it if there are any.
+// A file that's in several programs given has to come out the same in each, in `seen`. Nothing gets
+// written until all programs are known to be fine, see main.
 static bool Program(const char *exe, const string &program, const vector<string> &given, bool list,
                     bool write, map<string, string> &seen) {
     if (!fs::is_regular_file(program)) {
@@ -123,10 +124,6 @@ static bool Program(const char *exe, const string &program, const vector<string>
         ss << in.rdbuf();
         auto differs = ss.str() != f.result;
         if (list && differs) std::cout << f.path << "\n";
-        if (write && differs && !WriteFormatted(f.path, f.result)) {
-            std::cerr << f.path << ": can't write\n";
-            ok = false;
-        }
         auto printed = !given.empty() || f.path == StripFilePart(program) + main;
         if (!list && !write && printed) std::cout << f.result;
     }
@@ -165,6 +162,17 @@ int main(int argc, char **argv) {
     } catch (const fs::filesystem_error &e) {
         std::cerr << e.what() << "\n";
         status = 2;
+    }
+    if (write && !status) {
+        for (auto &[path, result] : seen) {
+            std::ifstream in(path, std::ios::binary);
+            std::stringstream ss;
+            ss << in.rdbuf();
+            if (ss.str() != result && !WriteFormatted(path, result)) {
+                std::cerr << path << ": can't write\n";
+                status = 2;
+            }
+        }
     }
     return status;
 }

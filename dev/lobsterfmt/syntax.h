@@ -47,6 +47,8 @@ struct Token {
     int owner = -1;
     // Whether it's in the header of an indented block, other than the token that starts that.
     bool inheader = false;
+    // A . with whitespace before it after a namespace's name: without any it'd be one token.
+    bool keepspace = false;
 };
 
 // A keyword, identifier, or inf or nan, which lex as floats.
@@ -118,6 +120,7 @@ struct Syntax {
     // How many interpolations are open, and where the outermost string started.
     int interp = 0;
     const char *interpstart = nullptr;
+    size_t interpws = 0;
     string blocks;
     int pendingowner = -1;
 
@@ -178,7 +181,9 @@ struct Recorder : TokenObserver {
         tok.text = string_view(f.src).substr(start, stop - start);
         tok.start = start;
         tok.end = stop;
-        tok.ws = int(lex.whitespacebefore);
+        tok.ws = int(t == T_STR && f.interpstart == from ? f.interpws : lex.whitespacebefore);
+        tok.keepspace = t == T_DOT && tok.ws && f.last >= 0 &&
+                        lex.namespaces.count(f.tokens[f.last].text);
         tok.cont = lex.cont;
         tok.i = f.codetokens++;
         tok.depth = f.depth;
@@ -206,7 +211,10 @@ struct Recorder : TokenObserver {
             case T_INDENT: f.blocks += 'i'; return;
             case T_DEDENT: f.blocks += 'd'; return;
             case T_STR_INT_START:
-                if (!f.interp++) f.interpstart = lex.tokenstart;
+                if (!f.interp++) {
+                    f.interpstart = lex.tokenstart;
+                    f.interpws = lex.whitespacebefore;
+                }
                 return;
             case T_STR_INT_MIDDLE: return;
             case T_STR_INT_END:
