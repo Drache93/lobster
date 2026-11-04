@@ -34,7 +34,7 @@ enum TokenRole {
     TR_DEFNAME,    // def name(
     TR_OPNAME,     // def operator+(
     TR_PARAMS,     // the ( of a function value: `f(x) (y:int):`
-    TR_TIGHT,      // `a-1`, which with a space would call a, a function and enum value
+    TR_TIGHT,      // after a function and enum value a: `a-1`, `[a]`, which with a space would call it
 };
 
 struct Lex;

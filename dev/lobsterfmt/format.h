@@ -35,7 +35,7 @@ namespace lobsterfmt {
 inline bool CanStartArgument(const Token &t) {
     switch (t.t) {
         case T_LEFTPAREN: case T_LEFTBRACKET: case T_LEFTCURLY: case T_MINUS: case T_NEG:
-        case T_INCR: case T_DECR: case T_LT:
+        case T_INCR: case T_DECR:
             return true;
         default:
             return t.t != T_NONE && (IsWord(t) || IsNumber(t) || IsString(t));
@@ -94,7 +94,7 @@ inline bool Spaced(const Token &a, const Token &b) {
     if (b.t == T_COMMA) return false;
     if (a.t == T_COMMA) return true;
     if (rb == TR_PARAMS) return true;
-    if (ra == TR_TIGHT) return false;
+    if (ra == TR_TIGHT && !IsCloser(a.t)) return false;
     if (rb == TR_POSTFIX || ra == TR_UNARY || ra == TR_OPNAME || a.t == T_OPERATOR) return false;
     if (a.t == T_INCLUDE && b.t == T_DOT) return true;  // import .file
     if (a.t == T_DOT || a.t == T_DOTDOT || a.t == T_TYPEIN || b.t == T_DOT || b.t == T_DOTDOT ||
@@ -321,7 +321,7 @@ struct Layout {
         auto p = prevcode;
         if (!p || p->i + 1 >= (int)syntax.code.size()) return false;
         auto &n = *syntax.code[p->i + 1];
-        return !n.ws && WsMatters(*p, n);
+        return !n.ws && (WsMatters(*p, n) || (IsName(*p) && n.t == T_LT));
     }
 
     int IndentOf(int r) {
@@ -556,18 +556,21 @@ inline string FormatProgram(string_view fn, string_view maindir, vector<Formatte
     Recorder before;
     auto errors = ReadProgram(fn, before);
     if (!errors.empty()) return errors;
-    auto modules = std::filesystem::absolute(MainDir() + "modules/")
-                       .lexically_normal()
-                       .generic_string();
+    // Through links too: /tmp is one on a Mac, and MainDir has the real path.
+    auto canonicaldir = [](string_view dir) {
+        return std::filesystem::weakly_canonical(string(dir)).generic_string() + "/";
+    };
+    auto modules = canonicaldir(MainDir() + "modules");
+    auto main = canonicaldir(maindir);
     map<string, string> changed;
     for (auto &f : before.files) {
         if (!f) continue;
-        auto path = std::filesystem::absolute(f->path).lexically_normal().generic_string();
+        auto path = std::filesystem::weakly_canonical(f->path).generic_string();
         // Never the compiler's own modules, wherever they are, unless that's the program.
         auto stock = string_view(path).starts_with(modules) &&
-                     !string_view(maindir).starts_with(modules);
+                     !string_view(main).starts_with(modules);
         auto wanted = only ? only->count(f->path) != 0
-                           : string_view(path).starts_with(maindir) && !stock;
+                           : string_view(path).starts_with(main) && !stock;
         if (!wanted) continue;
         if (auto nul = f->src.find('\0'); nul != string::npos) {
             f->Refuse("a NUL character", (int)nul);

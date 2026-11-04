@@ -235,7 +235,8 @@ struct Recorder : TokenObserver {
         auto &f = File(lex);
         if (f.interp) return;
         auto k = previous ? Previous(f) : f.last;
-        if (k >= 0) f.tokens[k].role = role;
+        // A closer right after a name that a space would call stays tight, whatever else it is.
+        if (k >= 0 && f.tokens[k].role != TR_TIGHT) f.tokens[k].role = role;
     }
 
     void NoContinuation(Lex &lex) override {

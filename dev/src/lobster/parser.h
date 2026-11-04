@@ -2451,8 +2451,9 @@ struct Parser {
         // Check for enum value.
         auto ev = st.EnumValLookup(idname, false);
         if (ev) {
-            if (!id && !field && (nf || f) && !lex.whitespacebefore && lex.token >= T_PLUS &&
-                lex.token <= T_OR) {
+            if (!id && !field && (nf || f) && !lex.whitespacebefore &&
+                ((lex.token >= T_PLUS && lex.token <= T_OR) ||
+                 Either(T_RIGHTBRACKET, T_RIGHTCURLY))) {
                 lex.Mark(TR_TIGHT);
             }
             auto ic = new IntConstant(lex, ev->val);

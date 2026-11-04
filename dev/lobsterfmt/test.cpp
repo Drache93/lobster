@@ -157,6 +157,12 @@ static const pair<string_view, string_view> goldens[] = {
     { "print(g\n    \"{a}\")\n", "print(g\n      \"{a}\")\n" },
     // Only an operator stays tight after such a name.
     { "print((red) + 1)\nlet v=red\nif red: 1 else: 2\n", "print((red) + 1)\nlet v = red\nif red: 1 else: 2\n" },
+    // A closer too, where the layout would put a space.
+    { "print([red])\nprint([1, red])\nprint(P {red}.x)\nprint(P {x:red}.x)\n",
+      "print([ red])\nprint([ 1, red])\nprint(P { red}.x)\nprint(P { x: red}.x)\n" },
+    // Type arguments with a space are normalised, as a space there doesn't decide anything here.
+    { "let w:Two<int, int> = Two <int, int> { 1, 2 }\nlet e = [] :: Two <int, int>\n",
+      "let w:Two<int, int> = Two<int, int> { 1, 2 }\nlet e = []::Two<int, int>\n" },
     // Type arguments glued to a comment, and a variable named like a namespace.
     { "def p<T>(v): return v\np/* c */<int>(1)\n", "def p<T>(v): return v\np/* c */<int>(1)\n" },
     { "let tcp = q\nprint(tcp .x)\n", "let tcp = q\nprint(tcp .x)\n" },
