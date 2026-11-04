@@ -149,6 +149,8 @@ double target_frametime = 0.001;
 static double fixed_frametime = 0.0;
 static double fixed_frame_pace = 0.0;
 double last_sleep = 0.0;
+// How far a long sleep has run over lately (seconds), see FrameSleep.
+double sleep_overshoot = 0.001;
 
 int2 screensize = int2_0;
 double2 inputscale = double2(1.0);
@@ -681,6 +683,22 @@ void NameToLower(string &name) {
     });
 }
 
+// Sleeps for secs as one long sleep, then SDL_DelayPrecise for the last of it. SDL_DelayPrecise
+// on its own sleeps in 1 ms steps, which wakes the CPU about a thousand times a second while a
+// frame cap waits. The long sleep stops short by what such sleeps have overshot lately (the OS
+// may coalesce timers, by more the longer the sleep).
+void FrameSleep(double secs) {
+    auto start = GetSeconds();
+    auto first = secs - sleep_overshoot - 0.0005;
+    if (first > 0.0) {
+        SDL_DelayNS((uint64_t)(first * 1000000000.0));
+        auto over = GetSeconds() - start - first;
+        sleep_overshoot = max(over, sleep_overshoot * 0.99);
+    }
+    auto left = secs - (GetSeconds() - start);
+    if (left > 0.0) SDL_DelayPrecise((uint64_t)(left * 1000000000.0));
+}
+
 bool SDLFrame() {
     if (minimized) {
         SDL_Delay(100);  // save CPU/battery
@@ -718,7 +736,7 @@ bool SDLFrame() {
     auto sleep_time = target_frametime - (frametime - last_sleep);
     last_sleep = 0.0;
     if (!fixed_frametime && sleep_time > 0.0) {
-        SDL_DelayPrecise((uint64_t)(sleep_time * 1000000000.0));
+        FrameSleep(sleep_time);
         last_sleep = sleep_time;
     }
 
