@@ -243,6 +243,25 @@ void SpecializationStats(SymbolTable &st, vector<pair<string, string>> &filename
     }
 }
 
+string ParseProgram(NativeRegistry &nfr, string_view fn, string_view source,
+                    TokenObserver &observer, vector<pair<string, string>> &filenames) {
+    #ifdef NDEBUG
+        SlabAlloc slaballoc;
+        if (g_current_slaballoc) return "nested slab allocator use";
+        g_current_slaballoc = &slaballoc;
+        struct SlabReset {
+            ~SlabReset() {
+                g_current_slaballoc = nullptr;
+            }
+        } slabreset;
+    #endif
+    Lex lex(fn, filenames, nfr.namespaces, source, 100, &observer);
+    SymbolTable st(lex);
+    Parser parser(nfr, lex, st);
+    parser.Parse();
+    return lex.errors;
+}
+
 string Compile(NativeRegistry &nfr, string_view fn, string_view stringsource,
                const CompileOptions &opts, string &c_codegen,
                string *parsedump, string *pakfile) {

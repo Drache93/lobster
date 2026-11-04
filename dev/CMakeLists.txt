@@ -118,6 +118,7 @@ endif()
 file(GLOB_RECURSE EXTERNAL_SRCS
   "external/flatbuffers/*.cpp"
 )
+set(EXTERNAL_SRCS_FLATBUFFERS ${EXTERNAL_SRCS})
 
 if(LOBSTER_ENGINE)
   set(SDL_SHARED OFF CACHE INTERNAL "")
@@ -333,6 +334,48 @@ if(LOBSTER_ENGINE)
     ${OPENGL_LIBRARIES})
 endif()
 
+# The formatter, a program of its own that uses the compiler's parser, without engine or JIT.
+if(NOT EMSCRIPTEN AND NOT ANDROID AND NOT LOBSTER_TOCPP)
+  # The builtins it doesn't link, from the compiler that does.
+  set(LOBSTERFMT_GEN ${CMAKE_CURRENT_BINARY_DIR}/lobsterfmt_gen)
+  file(MAKE_DIRECTORY ${LOBSTERFMT_GEN})
+  add_custom_command(
+    OUTPUT ${LOBSTERFMT_GEN}/builtin_names.h
+    COMMAND ${EXE_NAME} --gen-builtins-table > ${LOBSTERFMT_GEN}/builtin_names.h
+    DEPENDS ${EXE_NAME})
+  add_library(lobsterfmt_core OBJECT
+    ${LOBSTERFMT_GEN}/builtin_names.h
+    lobsterfmt/engine_names.cpp
+    src/builtins.cpp
+    src/compiler.cpp
+    src/file.cpp
+    src/lobsterreader.cpp
+    src/pakfile.cpp
+    src/platform.cpp
+    src/simplex.cpp
+    src/stdafx.cpp
+    src/tcp.cpp
+    src/vm.cpp
+    src/vmdata.cpp
+    ${EXTERNAL_SRCS_FLATBUFFERS})
+  target_compile_options(lobsterfmt_core PUBLIC -ULOBSTER_ENGINE -DLOBSTER_ENGINE=0)
+  target_include_directories(lobsterfmt_core PRIVATE ${LOBSTERFMT_GEN} lobsterfmt)
+  add_executable(lobsterfmt lobsterfmt/main.cpp $<TARGET_OBJECTS:lobsterfmt_core>)
+  add_executable(lobsterfmt_test lobsterfmt/test.cpp $<TARGET_OBJECTS:lobsterfmt_core>)
+  target_compile_options(lobsterfmt PUBLIC -ULOBSTER_ENGINE -DLOBSTER_ENGINE=0)
+  target_compile_options(lobsterfmt_test PUBLIC -ULOBSTER_ENGINE -DLOBSTER_ENGINE=0)
+  foreach(target lobsterfmt lobsterfmt_test)
+    target_link_libraries(${target} ${CMAKE_THREAD_LIBS_INIT} ${CMAKE_DL_LIBS})
+    if(APPLE)
+      target_link_libraries(${target} "-framework CoreFoundation")
+    endif()
+    if(UNIX)
+      target_link_libraries(${target} m)
+    endif()
+  endforeach()
+  install(TARGETS lobsterfmt DESTINATION ${BINDIR})
+endif()
+
 install(TARGETS ${EXE_NAME} DESTINATION ${BINDIR})
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/../data" DESTINATION ${DATADIR})
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/../modules" DESTINATION ${DATADIR})
@@ -343,3 +386,8 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/../docs/" DESTINATION ${DOCDIR})
 enable_testing()
 add_test(unittest ${EXE_NAME} ${CMAKE_SOURCE_DIR}/../tests/unittest.lobster)
 add_test(speedtest ${EXE_NAME} ${CMAKE_SOURCE_DIR}/../tests/speedtest.lobster)
+if(NOT EMSCRIPTEN AND NOT ANDROID AND NOT LOBSTER_TOCPP)
+  add_test(lobsterfmt lobsterfmt_test -compiler $<TARGET_FILE:${EXE_NAME}>
+           ${CMAKE_SOURCE_DIR}/../modules ${CMAKE_SOURCE_DIR}/../samples
+           ${CMAKE_SOURCE_DIR}/../tests)
+endif()

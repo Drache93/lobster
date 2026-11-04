@@ -73,6 +73,8 @@ dev/lobster/Release
 
 /bin/lobster_linux
 /bin/lobster
+/bin/lobsterfmt
+/bin/lobsterfmt_test
 /bin/compiled_lobster
 /bin/lobster\.exe
 /bin/lobsterDBG.*

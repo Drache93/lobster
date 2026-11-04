@@ -179,3 +179,30 @@ This is called a stack trace. Besides the error and the line it happened on, it
 will show all functions and blocks that called that code, in reverse order, with
 any local variables and their values. This helps you get an idea where the
 problem came from and helps in debugging.
+
+Formatting
+----------
+
+Format: `lobsterfmt [ -l ] [ -w ] PROGRAM.lobster ...`
+
+Or: `lobsterfmt [ -l ] [ -w ] -program PROGRAM.lobster FILE.lobster ...`
+
+Formats Lobster source in the layout of the [style guide](style_guide.html), with no options,
+like `gofmt`. Only the whitespace between tokens changes. It uses the compiler's own parser, which
+needs to know what names mean, so it takes the main file of a program, and formats the files of that
+program in the same directory or under it. Source with errors the parser reports is refused, and so
+is code after a comment at the start of a line outside brackets. A file that's in several programs
+has to come out the same in each.
+
+A library that imports what it uses is a program as far as this goes. A file that relies on what
+the file importing it imported first is formatted through that program: with `-program` just the
+files given, read as part of it.
+
+-   By default the main files, or the given files, are printed, formatted.
+
+-   `-l` : list the files whose formatting differs instead.
+
+-   `-w` : write the result to the files instead.
+
+It exits with 2 if a program can't be formatted safely. It is a separate program, in
+`dev/lobsterfmt`.
