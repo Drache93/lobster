@@ -439,6 +439,22 @@ int main(int argc, char **argv) {
         if (error.empty()) Failed("should have been refused", src);
         else if (IsBug(error)) Failed(error, src);
     }
+    // Not the compiler's own modules, also from a main file given without a directory.
+    {
+        auto start = fs::current_path();
+        fs::create_directories(dir);
+        fs::current_path(dir);
+        Overlay()["golden.lobster"] = "import std\nprint(1)\n";
+        SetProgram("golden.lobster");
+        vector<FormattedFile> formatted;
+        auto error = FormatProgram("golden.lobster", fs::current_path().generic_string() + "/",
+                                   formatted);
+        if (!error.empty() || formatted.size() != 1) {
+            Failed(cat("a program's imports from elsewhere: ", error, " ", formatted.size()), "");
+        }
+        Overlay().erase("golden.lobster");
+        fs::current_path(start);
+    }
     // Only the file asked for, read as part of the program.
     {
         auto part = dir + "part.lobster";
