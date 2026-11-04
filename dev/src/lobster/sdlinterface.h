@@ -33,6 +33,7 @@ extern bool SDLFrame();
 extern void SDLShutdown();
 extern void SDLTitle(string_view_nt title);
 extern bool SDLIsMinimized();
+extern bool SDLIsFocused();
 extern bool SDLHasDisplay();
 extern void SDLWindowMinMax(int dir);
 extern void SDLSetFullscreen(InitFlags flags);
