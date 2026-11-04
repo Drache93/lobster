@@ -963,7 +963,7 @@ pair<int64_t, int64_t> GetKS(string_view name) {
         // which makes gl_hit work correctly
         // FIXME: this causes more lag on mobile, instead, set a flag that this is the first frame we're touching,
         // and make that into a special case inside gl_hit
-        return ks.State();
+        return ks.Prev();
     #else
         return ks.State();
     #endif
