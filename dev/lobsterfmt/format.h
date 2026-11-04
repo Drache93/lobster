@@ -27,6 +27,8 @@
 
 #include "syntax.h"
 
+#include <filesystem>
+
 namespace lobsterfmt {
 
 // Whether this can start an argument to a call without (): `f x`, `f -1`.
@@ -546,7 +548,7 @@ struct FormattedFile {
     string result;
 };
 
-// Formats the program with main file `fn`, which is relative to `maindir`. On return the files of
+// Formats the program with main file `fn`, in the absolute path `maindir`. On return the files of
 // it in `maindir` or under it are in `files`, unless it returns why it can't be formatted safely.
 // With `only`, just those of it by the path they load from.
 inline string FormatProgram(string_view fn, string_view maindir, vector<FormattedFile> &files,
@@ -556,9 +558,10 @@ inline string FormatProgram(string_view fn, string_view maindir, vector<Formatte
     if (!errors.empty()) return errors;
     map<string, string> changed;
     for (auto &f : before.files) {
-        if (!f || !(only ? only->count(f->path) != 0 : string_view(f->path).starts_with(maindir))) {
-            continue;
-        }
+        if (!f) continue;
+        // Never the compiler's own modules, which it finds elsewhere.
+        auto path = std::filesystem::absolute(f->path).lexically_normal().generic_string();
+        if (!(only ? only->count(f->path) != 0 : string_view(path).starts_with(maindir))) continue;
         if (auto nul = f->src.find('\0'); nul != string::npos) {
             f->Refuse("a NUL character", (int)nul);
         }

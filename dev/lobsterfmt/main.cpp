@@ -73,7 +73,7 @@ static bool Program(const char *exe, const string &program, const vector<string>
         std::cerr << program << ": can't find the location of the modules\n";
         return false;
     }
-    auto maindir = StripFilePart(program);
+    auto maindir = fs::absolute(program).lexically_normal().parent_path().generic_string() + "/";
     auto canonical = [](const string &path) { return fs::weakly_canonical(path).string(); };
     // Which path the compiler loads each from, by what it is on disk.
     lobsterfmt::Recorder recorder;
@@ -127,7 +127,7 @@ static bool Program(const char *exe, const string &program, const vector<string>
             std::cerr << f.path << ": can't write\n";
             ok = false;
         }
-        auto printed = !given.empty() || f.path == maindir + main;
+        auto printed = !given.empty() || f.path == StripFilePart(program) + main;
         if (!list && !write && printed) std::cout << f.result;
     }
     return ok;
