@@ -18,7 +18,10 @@
 #include "lobster/glinterface.h"
 #include "lobster/glincludes.h"
 
+size_t buffers_made = 0;
+
 int GenBO_(string_view name, int type, size_t bytesize, const void *data, bool dyn) {
+    buffers_made++;
     int bo;
     GL_CALL(glGenBuffers(1, (GLuint *)&bo));
     GL_CALL(glBindBuffer(type, bo));
@@ -304,6 +307,7 @@ void RenderArrayStream(Primitive prim, string_view fmt, size_t vertsize, const v
     if (next == max_stream_buffers) next = 0;
     if (next == bufs.size()) {
         StreamBuffers sb;
+        buffers_made += 2;
         GL_CALL(glGenBuffers(1, (GLuint *)&sb.vbo));
         GL_CALL(glGenBuffers(1, (GLuint *)&sb.ibo));
         GL_CALL(glGenVertexArrays(1, (GLuint *)&sb.vao));
