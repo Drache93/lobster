@@ -90,6 +90,7 @@ int main(int argc, char* argv[]) {
         bool dump_builtins_ng = false;
         bool dump_builtins = false;
         bool dump_names = false;
+        bool dump_table = false;
         bool c_out = false;
         const char *default_lpak = "default.lpak";
         const char *lpak = nullptr;
@@ -125,6 +126,7 @@ int main(int argc, char* argv[]) {
             "--noconsole             Close console window (Windows).\n"
             "--gen-builtins-html     Write builtin commands help file.\n"
             "--gen-builtins-names    Write builtin commands - just names.\n"
+            "--gen-builtins-table    Print builtins and resource types as C++, for lobsterfmt.\n"
             #if LOBSTER_ENGINE
             "--non-interactive-test [N] Quit after N frames (default 1).\n"
             "--background            Open the window behind all others, without taking focus.\n"
@@ -162,6 +164,7 @@ int main(int argc, char* argv[]) {
                 else if (a == "--gen-builtins-html-ng") { dump_builtins_ng = true; }
                 else if (a == "--gen-builtins-html") { dump_builtins = true; }
                 else if (a == "--gen-builtins-names") { dump_names = true; }
+                else if (a == "--gen-builtins-table") { dump_table = true; }
                 else if (a == "--compile-only") { ropts.compile_only = true; }
                 else if (a == "--full-error") { opts.full_error = true; }
                 #if LOBSTER_ENGINE
@@ -257,6 +260,7 @@ int main(int argc, char* argv[]) {
         if (dump_builtins) { DumpBuiltinDoc(nfr, true); return 0; }
         if (dump_builtins_ng) { DumpBuiltinDoc(nfr, false); return 0; }
         if (dump_names) { DumpBuiltinNames(nfr); return 0; }
+        if (dump_table) { DumpBuiltinTable(nfr); return 0; }
 
         LOG_INFO("lobster version " GIT_COMMIT_INFOSTR);
 

@@ -92,6 +92,12 @@ extern void RegisterBuiltin(NativeRegistry &natreg, const char *ns, const char *
                             const BuiltinGroup &group);
 extern void RegisterCoreLanguageBuiltins(NativeRegistry &natreg);
 
+struct TokenObserver;
+
+// Only parses `fn` and what it imports, telling `observer` what it finds, returning the errors.
+extern string ParseProgram(NativeRegistry &natreg, string_view fn, string_view source,
+                           TokenObserver &observer, vector<pair<string, string>> &filenames);
+
 extern FileLoader EnginePreInit(NativeRegistry &nfr);
 extern "C" int RunCompiledCodeMain(int argc, const char *const *argv, const VMMetaData *vmmeta,
                                    const lobster::fun_base_t *vtables,
@@ -101,6 +107,7 @@ extern "C" int RunCompiledCodeMain(int argc, const char *const *argv, const VMMe
 
 // The builtin function reference, see builtindoc.cpp.
 extern void DumpBuiltinNames(NativeRegistry &nfr);
+extern void DumpBuiltinTable(NativeRegistry &nfr);
 extern void DumpBuiltinDoc(NativeRegistry &nfr, bool group_subsystem);
 extern void DumpBuiltinDocJson(NativeRegistry &nfr);
 
