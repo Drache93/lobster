@@ -32,6 +32,7 @@ extern void SDLRequireGLVersion(int major, int minor);
 extern bool SDLFrame();
 extern void SDLShutdown();
 extern void SDLTitle(string_view_nt title);
+extern bool SDLWindowIcon(const uint8_t *rgba, const int2 &dim);
 extern bool SDLIsMinimized();
 extern bool SDLIsFocused();
 extern bool SDLHasDisplay();

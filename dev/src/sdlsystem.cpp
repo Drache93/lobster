@@ -1022,6 +1022,14 @@ void SDLTitle(string_view_nt title) {
     SDL_SetWindowTitle(_sdl_window, title.c_str());
 }
 
+bool SDLWindowIcon(const uint8_t *rgba, const int2 &dim) {
+    auto surf = SDL_CreateSurfaceFrom(dim.x, dim.y, SDL_PIXELFORMAT_RGBA32, (void *)rgba, dim.x * 4);
+    if (!surf) return false;
+    auto ok = SDL_SetWindowIcon(_sdl_window, surf);
+    SDL_DestroySurface(surf);
+    return ok;
+}
+
 int SDLWheelDelta() { return mousewheeldelta; }
 bool SDLIsMinimized() { return minimized; }
 

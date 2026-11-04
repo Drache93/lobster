@@ -305,6 +305,18 @@ BUILTIN(window_title, "title", "S", "Sb",
     return s;
 }
 
+BUILTIN(window_icon, "filename", "S", "B",
+    "sets the window's icon (on macOS the Dock's) from an image file, returns true if succesful")
+(VM &vm, LString *fn) {
+    TestGL(vm);
+    int2 dim = int2_0;
+    auto buf = LoadImageFile(fn->strv(), dim);
+    if (!buf) return false;
+    auto ok = SDLWindowIcon(buf, dim);
+    FreeImageFromFile(buf);
+    return ok;
+}
+
 BUILTIN(window_min_max, "dir", "I", "",
     ">0 to maximize, <0 to minimize or 0 to restore.")
 (VM &vm, iint dir) {
