@@ -29,6 +29,13 @@ ResourceType mesh_type = { "mesh" };
 ResourceType texture_type = { "texture" };
 ResourceType timequery_type = { "timequery" };
 ResourceType buffer_object_type = { "bufferobject" };
+ResourceType cursor_type = { "cursor" };
+
+struct OwnedCursor : lobster::Resource {
+    void *cursor;
+    OwnedCursor(void *cursor) : cursor(cursor) {}
+    ~OwnedCursor() { SDLCursorDestroy(cursor); }
+};
 
 Mesh &GetMesh(Value res) {
     return GetResourceDec<Mesh>(res, &mesh_type);
@@ -357,6 +364,51 @@ BUILTIN(window_focused, "", "", "B",
     " the background may draw less often). Remains true in headless mode.")
 (VM &) {
     return SDLIsFocused();
+}
+
+BUILTIN(cursor_image, "filename,filename2x,hotspot", "SSI}:2", "R:cursor?",
+    "makes a colour mouse cursor, drawn by the OS, from an image file. filename2x is the same"
+    " cursor at twice the pixels for a high DPI display (\"\" for none). The hotspot is in pixels of"
+    " the first image. Returns nil if an image can't be read or the OS won't make the cursor")
+(VM &vm, LString *fn, LString *fn2x, iint2 hot) {
+    TestGL(vm);
+    int2 dim = int2_0, dim2x = int2_0;
+    auto buf = LoadImageFile(fn->strv(), dim);
+    if (!buf) return nullptr;
+    uint8_t *buf2x = nullptr;
+    if (fn2x->len) {
+        buf2x = LoadImageFile(fn2x->strv(), dim2x);
+        if (!buf2x) {
+            FreeImageFromFile(buf);
+            return nullptr;
+        }
+    }
+    auto c = SDLCursorFromImages(buf, dim, buf2x, dim2x, ToVec<int2>(hot));
+    FreeImageFromFile(buf);
+    if (buf2x) FreeImageFromFile(buf2x);
+    return c ? vm.NewResource(&cursor_type, new OwnedCursor(c)) : nullptr;
+}
+
+BUILTIN(cursor_set, "cursor", "R:cursor", "B",
+    "makes this the mouse cursor over the window, returns true if succesful")
+(VM &vm, LResource *c) {
+    TestGL(vm);
+    return SDLCursorSet(GetResourceDec<OwnedCursor>(c, &cursor_type).cursor);
+}
+
+BUILTIN(cursor_set_default, "", "", "B",
+    "goes back to the system's own mouse cursor, returns true if succesful")
+(VM &vm) {
+    TestGL(vm);
+    return SDLCursorSet(nullptr);
+}
+
+BUILTIN(cursor_visible, "on", "B", "B",
+    "shows or hides the mouse cursor and nothing else: unlike gl.cursor there's no relative mode,"
+    " gl.mouse_pos goes on and the mouse may leave the window. Returns true if succesful")
+(VM &vm, iint on) {
+    TestGL(vm);
+    return SDLCursorVisible(on != 0);
 }
 
 BUILTIN(cursor, "on", "B", "B",
