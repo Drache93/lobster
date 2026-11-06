@@ -1023,6 +1023,40 @@ bool SDLIsFocused() {
     return (flags & SDL_WINDOW_INPUT_FOCUS) && !(flags & SDL_WINDOW_OCCLUDED);
 }
 
+// A colour cursor from RGBA pixels, drawn by the OS. rgba2x (may be null) is the image for a 200% display: on macOS the
+// NSCursor holds both, its size and hot spot in points.
+void *SDLCursorFromImages(const uint8_t *rgba, const int2 &dim, const uint8_t *rgba2x, const int2 &dim2x, const int2 &hot) {
+    if (!has_display) return nullptr;
+    auto surf = SDL_CreateSurfaceFrom(dim.x, dim.y, SDL_PIXELFORMAT_RGBA32, (void *)rgba, dim.x * 4);
+    if (!surf) return nullptr;
+    if (rgba2x) {
+        auto surf2x = SDL_CreateSurfaceFrom(dim2x.x, dim2x.y, SDL_PIXELFORMAT_RGBA32, (void *)rgba2x, dim2x.x * 4);
+        if (surf2x) {
+            SDL_AddSurfaceAlternateImage(surf, surf2x);  // (it keeps a reference)
+            SDL_DestroySurface(surf2x);
+        }
+    }
+    auto cursor = SDL_CreateColorCursor(surf, hot.x, hot.y);
+    SDL_DestroySurface(surf);
+    return cursor;
+}
+
+void SDLCursorDestroy(void *cursor) {
+    if (has_display && cursor) SDL_DestroyCursor((SDL_Cursor *)cursor);
+}
+
+// Null: the system's own arrow.
+bool SDLCursorSet(void *cursor) {
+    if (!has_display) return false;
+    return SDL_SetCursor(cursor ? (SDL_Cursor *)cursor : SDL_GetDefaultCursor());
+}
+
+// Shows or hides the cursor alone: unlike SDLCursor, no relative mode and no warp, so the mouse position goes on.
+bool SDLCursorVisible(bool on) {
+    if (!has_display) return false;
+    return on ? SDL_ShowCursor() : SDL_HideCursor();
+}
+
 bool SDLCursor(bool on) {
     if (on == cursor) return cursor;
     cursor = !cursor;
