@@ -1016,7 +1016,7 @@ struct CodeGenBase {
             auto i = width == 1
                 ? (slot ? cat("(", idx, ") + ", slot) : string(idx))
                 : cat("(", idx, ") * ", width, slot ? cat(" + ", slot) : string());
-            auto ct = SlotCType(elemtype, 0);
+            auto ct = SlotMemCType(elemtype, 0);
             return Direct(cat("((", ct, ct.back() == '*' ? "" : " ", "*)", elems, ")[", i,
                               "]"), rtt);
         }
@@ -1028,6 +1028,18 @@ struct CodeGenBase {
     // The C type slot `i` of a value of this type holds.
     string SlotCType(TypeRef type, int i) {
         return CType(KindOf(SlotType(type, i)));
+    }
+
+    // The C type a slot in memory (a field of an object, an element of a vector) is held as.
+    // A slot is the size of a Value, which on a 32-bit target (WebAssembly) is wider than a
+    // pointer, so the C++ backend holds a reference or function there as an LSlot, which pads
+    // it to the slot's size there and is the plain pointer everywhere else, see vmdata.h.
+    string MemCType(VKind k) {
+        auto ct = CType(k);
+        return cpp && k >= VK_REF ? cat("LSlot<", ct, ">") : ct;
+    }
+    string SlotMemCType(TypeRef type, int i) {
+        return MemCType(KindOf(SlotType(type, i)));
     }
 
     // The members of a UDT. A field that is a struct of one type over and over is an array of
@@ -1051,16 +1063,16 @@ struct CodeGenBase {
                 return 1;
             }
             auto width = ValWidth(sfield.type);
-            auto ct = SlotCType(sfield.type, 0);
+            auto ct = SlotMemCType(sfield.type, 0);
             auto same = true;
-            for (int i = 1; i < width; i++) same = same && SlotCType(sfield.type, i) == ct;
+            for (int i = 1; i < width; i++) same = same && SlotMemCType(sfield.type, i) == ct;
             if (same) {
                 ms.push_back({ UniqueName(string(udt.g.fields[k].id->name), names_used), ct,
                                sfield.slot, width });
             } else {
                 for (int i = 0; i < width; i++) {
                     ms.push_back({ UniqueName(StructSlotName(udt, sfield.slot + i), names_used),
-                                   SlotCType(sfield.type, i), sfield.slot + i, 1 });
+                                   SlotMemCType(sfield.type, i), sfield.slot + i, 1 });
                 }
             }
             return width;
@@ -1079,7 +1091,7 @@ struct CodeGenBase {
                 if (k < 0) {
                     // A hidden slot.
                     ms.push_back({ UniqueName(StructSlotName(udt, s), names_used),
-                                   SlotCType(&udt.thistype, s), s, 1 });
+                                   SlotMemCType(&udt.thistype, s), s, 1 });
                     s++;
                 } else if (udt.sfields[k].bits) {
                     // A slot several fields share, named for the lowest of them, which in the
