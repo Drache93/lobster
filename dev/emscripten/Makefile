@@ -23,7 +23,7 @@ OPTLEVELLINK= -sASSERTIONS=0
 
 CFLAGS= $(OPTLEVEL)
 CXXFLAGS= $(OPTLEVEL)
-SHAREDFLAGS= -sUSE_SDL=3 -sUSE_SDL_MIXER=0 -sUSE_FREETYPE=1 -fwrapv \
+SHAREDFLAGS= -sUSE_SDL=3 -sUSE_SDL_MIXER=0 -sUSE_FREETYPE=1 -fwrapv -DDECODER_WAV -DDECODER_OGGVORBIS_STB \
          -Wall -pedantic -Wno-switch \
          -Wno-array-bounds -Wno-gnu-anonymous-struct -Wno-nested-anon-types \
 		 -Wno-nontrivial-memcall -Wno-strict-prototypes -Wno-empty-translation-unit
@@ -108,7 +108,9 @@ EFLAGS= -sWASM=1 -sUSE_WEBGL2=1 -sFULL_ES3=1 \
 		-sALLOW_MEMORY_GROWTH=1 -o lobster.html --preload-file assets@/ \
 		--emrun --profiling-funcs \
 		-sBINARYEN_IGNORE_IMPLICIT_TRAPS=1 \
-		-sASYNCIFY -sASYNCIFY_IGNORE_INDIRECT
+		-sASYNCIFY -sASYNCIFY_STACK_SIZE=1048576 -sSTACK_SIZE=8388608
+		# Not -sASYNCIFY_IGNORE_INDIRECT: a program that calls gl.frame() from a function value
+		# (a loader's progress callback, say) unwinds thru an indirect call, which that breaks.
 		#-sBINARYEN_EXTRA_PASSES='"--always-inline-max-function-size=5,--flexible-inline-max-function-size=50,--one-caller-inline-max-function-size=200"'
 
 #EMCC_DEBUG=1

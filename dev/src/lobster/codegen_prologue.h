@@ -94,6 +94,7 @@ struct CodeGenPrologue : virtual CodeGenBase {
                 "typedef lobster::LObject LObject;\n"
                 "typedef lobster::LVector LVector;\n"
                 "typedef lobster::LString LString;\n"
+                "using lobster::LSlot;\n"
                 "typedef lobster::LResource LResource;\n"
                 "typedef lobster::VMString VMString;\n"
                 "typedef lobster::VMField VMField;\n"

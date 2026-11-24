@@ -240,7 +240,7 @@ struct CodeGenLval : virtual CodeGenBase {
         for (int j = levels - 1; j >= 0; j--) {
             append(cb, "    _i = ", Read(Slot(levels - j, VK_INT)), ";\n");
             GenRangeCheck("_o", "_i", "_o->len");
-            if (j) append(cb, "    _o = ((LVector **)", Elems(), ")[_i];\n");
+            if (j) append(cb, "    _o = ((", MemCType(VK_VECTOR), " *)", Elems(), ")[_i];\n");
         }
     }
 

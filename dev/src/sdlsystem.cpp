@@ -426,6 +426,9 @@ string SDLInit(string_view_nt title, const int2 &desired_screensize, InitFlags f
             auto wflags = SDL_WINDOW_OPENGL | SDL_WINDOW_BORDERLESS;
             #ifdef __EMSCRIPTEN__
                 wflags |= SDL_WINDOW_RESIZABLE;
+                // The page can ask for the screen's own pixels (a Retina screen's twice as many) by setting this
+                // environment variable before the program starts: sharper, but more pixels to draw each frame.
+                if (SDL_GetHintBoolean("LOBSTER_WEB_HIGH_DPI", false)) wflags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
             #endif
             _sdl_window = SDL_CreateWindow(title.c_str(), screensize.x, screensize.y, wflags);
             LOG_INFO(_sdl_window ? "SDL window passed..." : "SDL window FAILED...");

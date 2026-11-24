@@ -444,6 +444,27 @@ typedef Value *StackPtr;
 // the ones that take nothing and return nothing, which is what a function value called from
 // native code is.
 typedef void (*fun_base_t)(VM &);
+
+// A reference or function as the generated code holds it in a slot in memory (a field of an
+// object, an element of a vector), see CodeGen::MemCType. A slot is the size of a Value, which
+// the runtime reads it as, see LoadSlot. Where a pointer is narrower than that (32-bit targets
+// such as WebAssembly) this pads it to the whole slot, writing the rest as zero, so the Value
+// the runtime reads is the pointer; everywhere else it is the pointer itself.
+#if UINTPTR_MAX == UINT32_MAX
+template<typename P> struct LSlot {
+    P p;
+    uint32_t pad;
+    operator P() const { return p; }
+    LSlot &operator=(P q) {
+        p = q;
+        pad = 0;
+        return *this;
+    }
+    P operator->() const { return p; }
+};
+#else
+template<typename P> using LSlot = P;
+#endif
 #if VM_JIT_MODE
     extern "C" const void *vm_ops_jit_table[];
 #else

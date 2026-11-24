@@ -441,7 +441,8 @@ bool FileDelete(string_view relfilename) {
 bool ScanDirAbs(string_view absdir, vector<DirectoryInfo> &dest) {
     using namespace std::filesystem;
     string folder = SanitizePath(absdir);
-    #if !defined(PLATFORM_ES3)
+    // The web's files are in memory (Emscripten's MEMFS), which std::filesystem lists too.
+    #if !defined(PLATFORM_ES3) || defined(__EMSCRIPTEN__)
         path p = folder.empty() ? "/" : folder;
         std::error_code ec;
         directory_iterator iter{p, ec};
