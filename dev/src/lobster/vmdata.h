@@ -455,6 +455,8 @@ template<typename P> struct LSlot {
     P p;
     uint32_t pad;
     operator P() const { return p; }
+    // So the generated code's casts to a more specific type, such as (LString *)slot, still work.
+    template<typename Q> explicit operator Q *() const { return (Q *)p; }
     LSlot &operator=(P q) {
         p = q;
         pad = 0;
